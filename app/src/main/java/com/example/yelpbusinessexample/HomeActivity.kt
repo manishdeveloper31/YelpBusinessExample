@@ -1,171 +1,151 @@
-package com.example.yelpbusinessexample;
+package com.example.yelpbusinessexample
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
+import androidx.appcompat.app.AppCompatActivity
+import com.example.yelpbusinessexample.data.repository.BusinessRepository
+import androidx.recyclerview.widget.RecyclerView
+import android.widget.TextView
+import com.example.yelpbusinessexample.ui.adapters.RestaurantAdapter
+import com.google.android.material.slider.Slider
+import com.google.android.material.progressindicator.CircularProgressIndicator
+import java.util.Timer
+import java.util.TimerTask
+import com.example.yelpbusinessexample.HomeActivity
+import android.os.Bundle
+import com.example.yelpbusinessexample.R
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.yelpbusinessexample.data.repository.BusinessRepositoryImpl
+import com.example.yelpbusinessexample.data.repository.BusinessRepository.LoadBusinessesCallback
+import com.example.yelpbusinessexample.data.model.Businesses
+import java.lang.Runnable
+import android.view.View
+import android.util.Log
+import com.example.yelpbusinessexample.ui.extension.PaginationScrollListener
+import java.util.HashMap
 
-import android.os.Bundle;
-import android.os.Handler;
-import android.util.Log;
-import android.view.View;
-import android.widget.TextView;
+class HomeActivity : AppCompatActivity() {
 
-import com.example.yelpbusinessexample.data.model.Businesses;
-import com.example.yelpbusinessexample.data.repository.BusinessRepository;
-import com.example.yelpbusinessexample.data.repository.BusinessRepositoryImpl;
-import com.example.yelpbusinessexample.ui.adapters.RestaurantAdapter;
-import com.example.yelpbusinessexample.ui.extension.PaginationScrollListener;
-import com.google.android.material.progressindicator.CircularProgressIndicator;
-import com.google.android.material.slider.Slider;
+    private lateinit var rvRestaurantList: RecyclerView
+    private lateinit var tvRadius: TextView
+    private lateinit var tvNoResult: TextView
+    private lateinit var radiusSlider: Slider
+    private lateinit var cpi_progress: CircularProgressIndicator
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+    private var businessRepository: BusinessRepository? = null
+    private var adapter: RestaurantAdapter? = null
+    private var timer: Timer? = null
+    private var timerTask: TimerTask? = null
 
-public class HomeActivity extends AppCompatActivity {
+    private var distance = 100
+    private var isLoading = false
+    private var isLastPage = false
+    private var TOTAL_PAGES = 5
+    private var currentPage = PAGE_START
 
-    private static final String TAG = HomeActivity.class.getName();
-    private static final int PAGE_START = 0;
-    private BusinessRepository businessRepository;
-    private RecyclerView rvRestaurantList;
-    private TextView tvRadius, tvNoResult;
-    private RestaurantAdapter adapter;
-    private Slider radiusSlider;
-    private CircularProgressIndicator cpi_progress;
-    private int distance = 100;
-    private Timer timer;
-    private TimerTask timerTask;
-    private boolean isLoading = false;
-    private boolean isLastPage = false;
-    private int TOTAL_PAGES = 5;
-    private int currentPage = PAGE_START;
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_home)
+        rvRestaurantList = findViewById(R.id.recyclerView)
+        radiusSlider = findViewById(R.id.radius_slider)
+        tvRadius = findViewById(R.id.tv_radius_selected)
+        tvNoResult = findViewById(R.id.tv_no_result)
+        cpi_progress = findViewById(R.id.cpi_progress)
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_home);
+        adapter = RestaurantAdapter(this)
+        val linearLayoutManager = LinearLayoutManager(this)
+        rvRestaurantList.setLayoutManager(linearLayoutManager)
+        rvRestaurantList.setAdapter(adapter)
 
-        rvRestaurantList = findViewById(R.id.recyclerView);
-        radiusSlider = findViewById(R.id.radius_slider);
-        tvRadius = findViewById(R.id.tv_radius_selected);
-        tvNoResult = findViewById(R.id.tv_no_result);
-        cpi_progress = findViewById(R.id.cpi_progress);
-
-        adapter = new RestaurantAdapter(this);
-        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(this);
-        rvRestaurantList.setLayoutManager(linearLayoutManager);
-        rvRestaurantList.setAdapter(adapter);
-
-        businessRepository = new BusinessRepositoryImpl(new BusinessRepository.LoadBusinessesCallback() {
-            @Override
-            public void onBusinessesLoaded(List<Businesses> businesses,int total) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        isLoading = false;
-                        TOTAL_PAGES = total / 15;
-                        if (currentPage == TOTAL_PAGES) {
-                            isLastPage = true;
-                        }
-
-                        cpi_progress.setVisibility(View.GONE);
-                        if (!businesses.isEmpty()) {
-                            adapter.setRestaurants(businesses);
-                            rvRestaurantList.setVisibility(View.VISIBLE);
-                            tvNoResult.setVisibility(View.GONE);
-                        } else {
-                            rvRestaurantList.setVisibility(View.GONE);
-                            tvNoResult.setVisibility(View.VISIBLE);
-                        }
+        businessRepository = BusinessRepositoryImpl(object : LoadBusinessesCallback {
+            override fun onBusinessesLoaded(businesses: List<Businesses>, total: Int) {
+                runOnUiThread {
+                    isLoading = false
+                    TOTAL_PAGES = total / 15
+                    if (currentPage == TOTAL_PAGES) {
+                        isLastPage = true
                     }
-                });
-            }
-
-            @Override
-            public void onDataNotAvailable() {
-                Log.d("Activity", "API Data Not Available");
-                cpi_progress.setVisibility(View.GONE);
-                rvRestaurantList.setVisibility(View.GONE);
-                tvNoResult.setVisibility(View.VISIBLE);
-            }
-
-            @Override
-            public void onError(boolean isCancel) {
-                if (!isCancel) {
-                    cpi_progress.setVisibility(View.GONE);
-                    rvRestaurantList.setVisibility(View.GONE);
-                    tvNoResult.setVisibility(View.VISIBLE);
+                    cpi_progress.setVisibility(View.GONE)
+                    if (!businesses.isEmpty()) {
+                        adapter!!.setRestaurants(businesses)
+                        rvRestaurantList.setVisibility(View.VISIBLE)
+                        tvNoResult.setVisibility(View.GONE)
+                    } else {
+                        rvRestaurantList.setVisibility(View.GONE)
+                        tvNoResult.setVisibility(View.VISIBLE)
+                    }
                 }
             }
-        });
 
-        radiusSlider.addOnChangeListener((slider, value, fromUser) -> {
-            Log.d(TAG, "Radius : " + value);
+            override fun onDataNotAvailable() {
+                Log.d("Activity", "API Data Not Available")
+                cpi_progress.setVisibility(View.GONE)
+                rvRestaurantList.setVisibility(View.GONE)
+                tvNoResult.setVisibility(View.VISIBLE)
+            }
+
+            override fun onError(isCancel: Boolean) {
+                if (!isCancel) {
+                    cpi_progress.setVisibility(View.GONE)
+                    rvRestaurantList.setVisibility(View.GONE)
+                    tvNoResult.setVisibility(View.VISIBLE)
+                }
+            }
+        })
+        radiusSlider.addOnChangeListener(Slider.OnChangeListener { slider: Slider?, value: Float, fromUser: Boolean ->
+            Log.d(TAG, "Radius : $value")
             if (value < 1000) {
-                tvRadius.setText(String.format("%.0f M", value));
+                tvRadius.setText(String.format("%.0f M", value))
             } else {
-                double km = value / 1000;
-                tvRadius.setText(String.format("%.1f KM", km));
+                val km = (value / 1000).toDouble()
+                tvRadius.setText(String.format("%.1f KM", km))
             }
-            isLoading = false;
-            isLastPage = false;
-            distance = (int) value;
-            getBusinessByParameters(null, distance);
-        });
-
-        rvRestaurantList.addOnScrollListener(new PaginationScrollListener(linearLayoutManager) {
-            @Override
-            protected void loadMoreItems() {
-                isLoading = true;
-                currentPage += 1;
-                getBusinessByParameters(null, (int) radiusSlider.getValue());
-            }
-
-            @Override
-            public boolean isLastPage() {
-                return isLastPage;
+            isLoading = false
+            isLastPage = false
+            distance = value.toInt()
+            getBusinessByParameters(null, distance)
+        })
+        rvRestaurantList.addOnScrollListener(object :
+            PaginationScrollListener(linearLayoutManager) {
+            override fun loadMoreItems() {
+                isLoading = true
+                currentPage += 1
+                getBusinessByParameters(null, radiusSlider.getValue().toInt())
             }
 
-            @Override
-            public boolean isLoading() {
-                return isLoading;
-            }
-        });
+            override fun isLastPage(): Boolean = isLastPage
 
-        getBusinessByParameters(null, distance);
+            override fun isLoading(): Boolean = isLoading
+
+        })
+        getBusinessByParameters(null, distance)
     }
 
-    private void getBusinessByParameters(String location, int radius) {
-        if (timer != null) {
-            timer.cancel();
-            timer.purge();
+    private fun getBusinessByParameters(location: String?, radius: Int) {
+        timer?.cancel()
+        timer?.purge()
+
+        timer = Timer()
+        timerTask = object : TimerTask() {
+            override fun run() {
+                runOnUiThread {
+                    val queryMap = HashMap<String, String>()
+                    queryMap["term"] = "restaurants"
+                    queryMap["location"] = "NYC"
+                    queryMap["radius"] = "" + radius
+                    queryMap["sort_by"] = "distance"
+                    queryMap["limit"] = "15"
+                    queryMap["offset"] = "" + currentPage * 15
+                    cpi_progress.visibility = View.VISIBLE
+                    tvNoResult.visibility = View.GONE
+                    rvRestaurantList.visibility = View.GONE
+                    businessRepository!!.getBusinesses(queryMap)
+                }
+            }
         }
-
-        timer = new Timer();
-        timerTask = new TimerTask() {
-            @Override
-            public void run() {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        HashMap<String, String> queryMap = new HashMap<>();
-                        queryMap.put("term", "restaurants");
-                        queryMap.put("location", "NYC");
-                        queryMap.put("radius", "" + radius);
-                        queryMap.put("sort_by", "distance");
-                        queryMap.put("limit", "15");
-                        queryMap.put("offset", "" + currentPage * 15);
-                        cpi_progress.setVisibility(View.VISIBLE);
-                        tvNoResult.setVisibility(View.GONE);
-                        rvRestaurantList.setVisibility(View.GONE);
-                        businessRepository.getBusinesses(queryMap);
-                    }
-                });
-            }
-        };
-
-        timer.schedule(timerTask, 1000);
+        timer?.schedule(timerTask, 1000)
     }
 
+    companion object {
+        private val TAG = HomeActivity::class.java.name
+        private const val PAGE_START = 0
+    }
 }
