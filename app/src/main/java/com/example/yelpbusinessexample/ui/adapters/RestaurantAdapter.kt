@@ -24,6 +24,11 @@ class RestaurantAdapter(private val context: Context) : RecyclerView.Adapter<Res
         }
     }
 
+    fun clearList() {
+        restaurants.clear()
+        notifyDataSetChanged()
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RestaurantViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.layout_restaurant_item_row, parent, false)

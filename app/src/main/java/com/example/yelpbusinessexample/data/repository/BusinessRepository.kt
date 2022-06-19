@@ -7,10 +7,9 @@ interface BusinessRepository {
 
     interface LoadBusinessesCallback {
         fun onBusinessesLoaded(businesses: List<Businesses>, total: Int)
-        fun onDataNotAvailable()
         fun onError(isCancel: Boolean)
     }
 
     fun cancelCall()
-    fun getBusinesses(queryMap: HashMap<String, String>)
+    fun getBusinesses(queryMap: HashMap<String, String>, callback: LoadBusinessesCallback)
 }

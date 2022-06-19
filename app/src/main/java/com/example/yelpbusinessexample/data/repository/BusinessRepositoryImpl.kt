@@ -11,7 +11,7 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
-class BusinessRepositoryImpl(var callback: LoadBusinessesCallback) : BusinessRepository {
+class BusinessRepositoryImpl : BusinessRepository {
 
     private val serviceApi: YelpServiceApi by lazy {
         instance!!.yelpServiceApi
@@ -19,7 +19,7 @@ class BusinessRepositoryImpl(var callback: LoadBusinessesCallback) : BusinessRep
 
     private var businessResponseCall: Call<BusinessResponse?>? = null
 
-    override fun getBusinesses(queryMap: HashMap<String, String>) {
+    override fun getBusinesses(queryMap: HashMap<String, String>, callback : LoadBusinessesCallback) {
         businessResponseCall = serviceApi.getBusinessesByDistance(
             "Bearer XPFgzKwZGK1yqRxHi0d5xsARFOLpXIvccQj5jekqTnysweGyoIfVUHcH2tPfGq5Oc9kwKHPkcOjk2d1Xobn7aTjOFeop8x41IUfVvg2Y27KiINjYPADcE7Qza0RkX3Yx",
             queryMap
@@ -31,7 +31,7 @@ class BusinessRepositoryImpl(var callback: LoadBusinessesCallback) : BusinessRep
                     val businesses: List<Businesses> = response.body()!!.businesses!!
                     callback.onBusinessesLoaded(businesses, response.body()!!.total)
                 } else {
-                    callback.onDataNotAvailable()
+                    callback.onError(false)
                 }
             }
 

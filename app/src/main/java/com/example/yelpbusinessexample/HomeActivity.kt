@@ -19,133 +19,63 @@ import com.example.yelpbusinessexample.data.model.Businesses
 import java.lang.Runnable
 import android.view.View
 import android.util.Log
+import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProviders
+import com.example.yelpbusinessexample.databinding.ActivityHomeBinding
 import com.example.yelpbusinessexample.ui.extension.PaginationScrollListener
+import com.example.yelpbusinessexample.ui.viewmodel.HomeViewModel
+import com.example.yelpbusinessexample.ui.viewmodel.HomeViewModelFactory
 import java.util.HashMap
 
 class HomeActivity : AppCompatActivity() {
 
-    private lateinit var rvRestaurantList: RecyclerView
-    private lateinit var tvRadius: TextView
-    private lateinit var tvNoResult: TextView
-    private lateinit var radiusSlider: Slider
-    private lateinit var cpi_progress: CircularProgressIndicator
-
-    private var businessRepository: BusinessRepository? = null
+    private lateinit var binding : ActivityHomeBinding
     private var adapter: RestaurantAdapter? = null
-    private var timer: Timer? = null
-    private var timerTask: TimerTask? = null
-
-    private var distance = 100
-    private var isLoading = false
-    private var isLastPage = false
-    private var TOTAL_PAGES = 5
-    private var currentPage = PAGE_START
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_home)
-        rvRestaurantList = findViewById(R.id.recyclerView)
-        radiusSlider = findViewById(R.id.radius_slider)
-        tvRadius = findViewById(R.id.tv_radius_selected)
-        tvNoResult = findViewById(R.id.tv_no_result)
-        cpi_progress = findViewById(R.id.cpi_progress)
-
-        adapter = RestaurantAdapter(this)
-        val linearLayoutManager = LinearLayoutManager(this)
-        rvRestaurantList.setLayoutManager(linearLayoutManager)
-        rvRestaurantList.setAdapter(adapter)
-
-        businessRepository = BusinessRepositoryImpl(object : LoadBusinessesCallback {
-            override fun onBusinessesLoaded(businesses: List<Businesses>, total: Int) {
-                runOnUiThread {
-                    isLoading = false
-                    TOTAL_PAGES = total / 15
-                    if (currentPage == TOTAL_PAGES) {
-                        isLastPage = true
-                    }
-                    cpi_progress.setVisibility(View.GONE)
-                    if (!businesses.isEmpty()) {
-                        adapter!!.setRestaurants(businesses)
-                        rvRestaurantList.setVisibility(View.VISIBLE)
-                        tvNoResult.setVisibility(View.GONE)
-                    } else {
-                        rvRestaurantList.setVisibility(View.GONE)
-                        tvNoResult.setVisibility(View.VISIBLE)
-                    }
-                }
-            }
-
-            override fun onDataNotAvailable() {
-                Log.d("Activity", "API Data Not Available")
-                cpi_progress.setVisibility(View.GONE)
-                rvRestaurantList.setVisibility(View.GONE)
-                tvNoResult.setVisibility(View.VISIBLE)
-            }
-
-            override fun onError(isCancel: Boolean) {
-                if (!isCancel) {
-                    cpi_progress.setVisibility(View.GONE)
-                    rvRestaurantList.setVisibility(View.GONE)
-                    tvNoResult.setVisibility(View.VISIBLE)
-                }
-            }
-        })
-        radiusSlider.addOnChangeListener(Slider.OnChangeListener { slider: Slider?, value: Float, fromUser: Boolean ->
-            Log.d(TAG, "Radius : $value")
-            if (value < 1000) {
-                tvRadius.setText(String.format("%.0f M", value))
-            } else {
-                val km = (value / 1000).toDouble()
-                tvRadius.setText(String.format("%.1f KM", km))
-            }
-            isLoading = false
-            isLastPage = false
-            distance = value.toInt()
-            getBusinessByParameters(null, distance)
-        })
-        rvRestaurantList.addOnScrollListener(object :
-            PaginationScrollListener(linearLayoutManager) {
-            override fun loadMoreItems() {
-                isLoading = true
-                currentPage += 1
-                getBusinessByParameters(null, radiusSlider.getValue().toInt())
-            }
-
-            override fun isLastPage(): Boolean = isLastPage
-
-            override fun isLoading(): Boolean = isLoading
-
-        })
-        getBusinessByParameters(null, distance)
-    }
-
-    private fun getBusinessByParameters(location: String?, radius: Int) {
-        timer?.cancel()
-        timer?.purge()
-
-        timer = Timer()
-        timerTask = object : TimerTask() {
-            override fun run() {
-                runOnUiThread {
-                    val queryMap = HashMap<String, String>()
-                    queryMap["term"] = "restaurants"
-                    queryMap["location"] = "NYC"
-                    queryMap["radius"] = "" + radius
-                    queryMap["sort_by"] = "distance"
-                    queryMap["limit"] = "15"
-                    queryMap["offset"] = "" + currentPage * 15
-                    cpi_progress.visibility = View.VISIBLE
-                    tvNoResult.visibility = View.GONE
-                    rvRestaurantList.visibility = View.GONE
-                    businessRepository!!.getBusinesses(queryMap)
-                }
-            }
-        }
-        timer?.schedule(timerTask, 1000)
-    }
+    private lateinit var viewModel : HomeViewModel
 
     companion object {
         private val TAG = HomeActivity::class.java.name
-        private const val PAGE_START = 0
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = DataBindingUtil.setContentView(this, R.layout.activity_home)
+
+        viewModel = ViewModelProvider(this, HomeViewModelFactory(BusinessRepositoryImpl())).get(HomeViewModel::class.java)
+
+        binding.viewModel = viewModel
+        binding.lifecycleOwner = this
+
+        adapter = RestaurantAdapter(this)
+        val linearLayoutManager = LinearLayoutManager(this)
+        binding.recyclerView.layoutManager  = linearLayoutManager
+        binding.recyclerView.adapter = adapter
+
+        viewModel.businessList.observe(this, Observer {
+            adapter!!.setRestaurants(it)
+        })
+
+        binding.radiusSlider.addOnChangeListener(Slider.OnChangeListener { slider: Slider?, value: Float, fromUser: Boolean ->
+            viewModel.currentPage.value = 0;
+            viewModel.radiusValue.value = value.toInt()
+            adapter!!.clearList()
+            viewModel.getBusiness()
+        })
+
+        binding.recyclerView.addOnScrollListener(object :
+            PaginationScrollListener(linearLayoutManager) {
+            override fun loadMoreItems() {
+                viewModel.currentPage.value = viewModel.currentPage.value?.inc()
+                viewModel.getBusiness()
+            }
+
+            override fun isLastPage(): Boolean = viewModel.isLastPage.value == true
+
+            override fun isLoading(): Boolean = viewModel.isLoading.value == true
+
+        })
+        viewModel.getBusiness()
     }
 }
